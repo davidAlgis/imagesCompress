@@ -61,23 +61,55 @@ def compress_gif(input_path, output_path, colors=128):
         raise Exception(f"Unable to save compressed GIF: {e}")
 
 
+def process_image(input_file, output_dir=None, quality=80, colors=128):
+    base_name, ext = os.path.splitext(os.path.basename(input_file))
+    ext = ext.lower()
+
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        if ext == ".png":
+            output_file = os.path.join(
+                output_dir, base_name + "_compressed.jpg"
+            )
+        elif ext == ".gif":
+            output_file = os.path.join(
+                output_dir, base_name + "_compressed.gif"
+            )
+    else:
+        if ext == ".png":
+            output_file = os.path.join(
+                os.path.dirname(input_file), base_name + "_compressed.jpg"
+            )
+        elif ext == ".gif":
+            output_file = os.path.join(
+                os.path.dirname(input_file), base_name + "_compressed.gif"
+            )
+
+    if ext == ".png":
+        convert_png_to_jpeg(input_file, output_file, quality=quality)
+    elif ext == ".gif":
+        compress_gif(input_file, output_file, colors=colors)
+    else:
+        raise Exception(f"Unsupported file type: {ext}")
+
+
 def main():
     parser = argparse.ArgumentParser(
-        description="Convert PNG to JPEG and compress GIFs from a folder."
+        description="Convert PNG to JPEG and compress GIFs (file or folder)."
     )
     parser.add_argument(
         "-i",
         "--input",
         type=str,
         required=True,
-        help="Path to the input folder.",
+        help="Path to input file or folder containing PNG/GIF images.",
     )
     parser.add_argument(
         "-o",
         "--output",
         type=str,
         default=None,
-        help="Path to the output folder. If omitted, files are saved in the same location with _compressed suffix.",
+        help="Output folder. If omitted, compressed files are saved next to input.",
     )
     parser.add_argument(
         "-q",
@@ -95,65 +127,49 @@ def main():
 
     args = parser.parse_args()
 
-    if not os.path.isdir(args.input):
-        print(
-            f"Error: The input folder '{args.input}' does not exist or is not a directory."
-        )
-        exit(1)
-
-    if args.output:
-        if not os.path.exists(args.output):
-            os.makedirs(args.output)
-
-    image_files = [
-        f
-        for f in os.listdir(args.input)
-        if os.path.isfile(os.path.join(args.input, f))
-        and f.lower().endswith((".png", ".gif"))
-    ]
-
-    if not image_files:
-        print("No PNG or GIF images found in the specified input folder.")
-        exit(0)
-
-    print(f"Found {len(image_files)} image(s) to process.")
-
-    for filename in tqdm.tqdm(image_files, desc="Processing images"):
-        input_file = os.path.join(args.input, filename)
-        base, ext = os.path.splitext(filename)
-        ext = ext.lower()
-
-        if args.output:
-            if ext == ".png":
-                output_file = os.path.join(
-                    args.output, base + "_compressed.jpg"
-                )
-            elif ext == ".gif":
-                output_file = os.path.join(
-                    args.output, base + "_compressed.gif"
-                )
-        else:
-            # Save in same folder as input
-            if ext == ".png":
-                output_file = os.path.join(
-                    args.input, base + "_compressed.jpg"
-                )
-            elif ext == ".gif":
-                output_file = os.path.join(
-                    args.input, base + "_compressed.gif"
-                )
-
+    if os.path.isfile(args.input):
+        print("Processing single file...")
         try:
-            if ext == ".png":
-                convert_png_to_jpeg(
-                    input_file, output_file, quality=args.quality
-                )
-            elif ext == ".gif":
-                compress_gif(input_file, output_file, colors=args.colors)
+            process_image(
+                args.input,
+                output_dir=args.output,
+                quality=args.quality,
+                colors=args.colors,
+            )
         except Exception as e:
-            print(f"Error processing '{filename}': {e}")
+            print(f"Error processing file: {e}")
+        print("Done.")
+        return
 
-    print("Done processing images.")
+    elif os.path.isdir(args.input):
+        image_files = [
+            f
+            for f in os.listdir(args.input)
+            if os.path.isfile(os.path.join(args.input, f))
+            and f.lower().endswith((".png", ".gif"))
+        ]
+
+        if not image_files:
+            print("No PNG or GIF images found in the specified input folder.")
+            return
+
+        print(f"Found {len(image_files)} image(s) to process.")
+
+        for filename in tqdm.tqdm(image_files, desc="Processing images"):
+            input_file = os.path.join(args.input, filename)
+            try:
+                process_image(
+                    input_file,
+                    output_dir=args.output,
+                    quality=args.quality,
+                    colors=args.colors,
+                )
+            except Exception as e:
+                print(f"Error processing '{filename}': {e}")
+        print("Done.")
+
+    else:
+        print(f"Error: '{args.input}' is neither a file nor a directory.")
 
 
 if __name__ == "__main__":
